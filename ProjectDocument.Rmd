@@ -1,0 +1,87 @@
+---
+title: "Machine learning project"
+author: "Ricardo Molero"
+date: "11 de novembro de 2015"
+output: html_document
+---
+
+This document was developed to explain the machine learning based analysis required for the course project.
+
+#Executive summary
+
+The best model was a "random forest" model developed with the all default parameters of the train function on caret package. All data (columns) without NA's were used on the model development and the accuracy on the training and on cross-validation set was impressive - between 99.95% and 100%. The results on the testing set were 20 in 20.
+
+#Main
+
+We will only need 2 libraries and the required data for training and testing
+
+```{r, message = FALSE, warning = FALSE}
+
+options(warn = -1) ## Disable warnings
+
+library(caret, quietly = TRUE) ## training and predicting functions
+library(fields, quietly = TRUE) ## to evaluate columns with missing values
+
+finalTesting <- read.csv("pml-testing.csv")
+training <- read.csv("pml-training.csv")
+
+set.seed(1234)
+```
+
+First we have to clean the data, since many columns have lots of NA's - after the cleaning, 56 columns had usable data on all rows, which seemed enough to develop a decision tree. All of the 104 removed columns were composed majorly of NA's.
+
+```{r, message = FALSE, warning = FALSE}
+
+analiseCols <- as.data.frame(t(stats(training)))
+analiseCols[is.na(analiseCols$N),]$N <- 0
+cleanCols <- analiseCols$N == 19622 ##only "complete" clomuns will be used
+
+cleanTraining <- training[,cleanCols]
+
+cleanTraining$classe <- training$classe
+cleanTraining <- cleanTraining[,2:57]
+
+sum(cleanCols)
+```
+
+The data was partitioned in 75% training and 25% validating in order to estimate the accuracy on the final test.
+
+```{r, message = FALSE, warning = FALSE}
+
+inTrain <- createDataPartition(y = cleanTraining$classe, p = 0.75, list = FALSE)
+
+subTraining <- cleanTraining[inTrain,]
+subValidating <- cleanTraining[-inTrain,]
+```
+
+After that, a random forest model was trained - it required more than 1 hour of processing (in a i7 / 8 GB machine) - in order to be able to compile the HTML file without running the train function, the following code first tries to "import" the already trained model, otherwise, it will run it again.
+
+```{r, message = FALSE, warning = FALSE}
+
+if(file.exists("fitModelRF.Rdata")){
+        load("fitModelRF.Rdata")} else {
+                fit <- train(classe ~., data = subTraining, method = "rf")
+        }
+
+pred <- predict(fit, newdata = subValidating)
+table(pred, subValidating$classe)
+sum(pred == subValidating$classe) / length(pred)
+
+```
+
+And the results were very impressive - 100% accuracy. As we can see, 500 trees were developed - the maximum default value for train on "rf" method. The accuracy on the training set was 99.9%. On the testing set (other part of the assignment) the accuracy was 20 in 20.
+
+```{r, message = FALSE, warning = FALSE}
+fit$finalModel
+```
+
+In order to compare it, a single tree decision model has only 49.5% accuracy on the validating set.
+
+```{r, message = FALSE, warning = FALSE}
+fitSingle <- train(classe ~., data = subTraining, method = "rpart")
+
+predSingle <- predict(fitSingle, newdata = subValidating)
+table(predSingle, subValidating$classe)
+sum(predSingle == subValidating$classe) / length(predSingle)
+
+```
